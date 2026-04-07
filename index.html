@@ -148,11 +148,32 @@
         import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // Vercel/GitHub дээр ажиллахад зориулсан тохиргоо
+        // Хэрэв та Canvas-аас гадна ажиллуулж байгаа бол өөрийн Firebase төслийн мэдээллийг доорх object-д хуулж тавина уу.
+        let firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Canvas орчны хувьсагчдыг шалгаж авах
+        try {
+            if (typeof __firebase_config !== 'undefined') {
+                firebaseConfig = JSON.parse(__firebase_config);
+            }
+        } catch (e) {
+            console.log("Canvas config not found, using manual config.");
+        }
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // App ID шалгалт
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-awesome-links-app';
 
         let currentUser = null;
         const linksCollection = collection(db, 'artifacts', appId, 'public', 'data', 'links');
@@ -196,10 +217,14 @@
 
         // Authentication (Rule 3)
         const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed. Make sure Firestore rules allow anonymous access or provide valid config.", error);
             }
         };
 
@@ -208,6 +233,8 @@
             if (user) {
                 document.getElementById('authStatus').innerText = "Клоуд холболт идэвхтэй";
                 startListening();
+            } else {
+                document.getElementById('authStatus').innerText = "Нэвтрээгүй байна";
             }
         });
 
@@ -232,7 +259,7 @@
                         cardsGrid.appendChild(card);
                     });
                 }
-            }, (error) => console.error(error));
+            }, (error) => console.error("Firestore links error:", error));
 
             // Listen to Site Settings
             onSnapshot(configDocRef, (docSnap) => {
@@ -249,7 +276,7 @@
                         siteLogoContainer.classList.add('hidden');
                     }
                 }
-            }, (error) => console.error(error));
+            }, (error) => console.error("Firestore config error:", error));
         }
 
         // Action Handlers
@@ -265,7 +292,10 @@
         closeSettingsBtn.onclick = () => settingsOverlay.classList.remove('active');
 
         addBtn.onclick = async () => {
-            if (!currentUser) return;
+            if (!currentUser) {
+                alert("Холболт амжилтгүй. Түр хүлээнэ үү.");
+                return;
+            }
             const url = document.getElementById('urlInput').value.trim();
             const name = document.getElementById('nameInput').value.trim();
             const desc = document.getElementById('descInput').value.trim();
@@ -288,7 +318,7 @@
                 document.getElementById('urlInput').value = '';
                 document.getElementById('nameInput').value = '';
                 document.getElementById('descInput').value = '';
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error("Save error:", err); }
             finally {
                 document.getElementById('addLoader').classList.add('hidden');
                 document.getElementById('addIcon').classList.remove('hidden');
@@ -308,7 +338,7 @@
                     updatedAt: serverTimestamp()
                 });
                 settingsOverlay.classList.remove('active');
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error("Settings save error:", err); }
             finally {
                 document.getElementById('settingsLoader').classList.add('hidden');
             }
@@ -326,19 +356,25 @@
             } else {
                 const newTitle = document.getElementById(`edit-title-${id}`).value;
                 const newDesc = document.getElementById(`edit-desc-${id}`).value;
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'links', id), {
-                    title: newTitle, desc: newDesc
-                });
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'links', id), {
+                        title: newTitle, desc: newDesc
+                    });
+                } catch (e) { console.error("Update error:", e); }
             }
         };
 
         window.updateIcon = async (id, iconClass) => {
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'links', id), { iconClass });
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'links', id), { iconClass });
+            } catch (e) { console.error("Icon update error:", e); }
         };
 
         window.deleteCard = async (id) => {
             if (confirm("Устгах уу?")) {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'links', id));
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'links', id));
+                } catch (e) { console.error("Delete error:", e); }
             }
         };
 
